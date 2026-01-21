@@ -2,32 +2,45 @@ import paho.mqtt.client as mqtt
 import time
 import json
 import random
+import os
+from dotenv import load_dotenv
 
-# Use Version 2.0 API
-client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-client.connect("broker.hivemq.com", 1883, 60)
+# Charge les variables d'environnement
+load_dotenv()
 
-co2_level = 420.0  # Starting baseline (Outdoor air is ~400-450)
+# Configuration ETSI: Utilisation d'identifiants uniques
+CLIENT_ID = os.getenv("PUBLISHER_ID")
+TOKEN = os.getenv("PUBLISHER_TOKEN")
+BROKER = os.getenv("MQTT_BROKER")
 
-print("CO2 Sensor Simulation Started...")
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=CLIENT_ID)
+client.username_pw_set(CLIENT_ID, TOKEN) # Authentification sécurisée
+
+client.connect(BROKER, int(os.getenv("MQTT_PORT")), 60)
+
+co2_level = 420.0
+trend = 1.0 
+
+print(f"Simulation ETSI lancée (ID: {CLIENT_ID})")
 
 try:
     while True:
-        # Simulate a realistic fluctuation (+/- 2 PPM)
-        co2_level += random.uniform(-2, 2)
+        co2_level += random.uniform(20, 100) * trend
         
-        # Prepare the data packet
         data = {
+            "device_id": CLIENT_ID,
             "co2": round(co2_level, 2),
-            "unit": "PPM",
-            "timestamp": time.time()  # For performance tracking
+            "timestamp": time.time(),
+            "status": "normal" if co2_level < 1000 else "alert"
         }
         
-        payload = json.dumps(data)
-        client.publish("sensors/room1/co2", payload)
+        # Publication avec QoS 1 pour respect de la norme de fiabilité
+        client.publish("sensors/room1/co2", json.dumps(data), qos=1)
+        print(f"Envoyé: {data['co2']} PPM")
         
-        print(f"Sent: {data['co2']} PPM")
-        time.sleep(1) 
+        if co2_level > 10000: break 
+        time.sleep(0.5) 
+        
 except KeyboardInterrupt:
     client.disconnect()
     
