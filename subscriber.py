@@ -1,3 +1,4 @@
+import hashlib
 import paho.mqtt.client as mqtt
 import json
 import time
@@ -9,6 +10,8 @@ load_dotenv()
 CLIENT_ID = os.getenv("SUBSCRIBER_ID")
 TOKEN = os.getenv("SUBSCRIBER_TOKEN")
 BROKER = os.getenv("MQTT_BROKER")
+
+BLOCKCHAIN:list[dict] = []
 
 def on_message(client, userdata, msg):
     try:
@@ -24,7 +27,15 @@ def on_message(client, userdata, msg):
         if co2 > 5000: status = "DANGER"
 
         print(f"[{status}] ID: {data['device_id']} | CO2: {co2} PPM | Latence: {latency:.2f}ms")
-            
+        
+        block:dict = {
+            "data_hash": hashlib.sha256(msg).hexdigest(),
+            "prev_hash": BLOCKCHAIN[-1]["data_hash"] if BLOCKCHAIN else "GENESIS",
+            "timestamp": int(time.time())
+        }
+
+        BLOCKCHAIN.append(block)
+
     except Exception as e:
         print(f"Erreur de parsing: {e}")
 
