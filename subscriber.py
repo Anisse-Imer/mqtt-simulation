@@ -15,29 +15,36 @@ BLOCKCHAIN:list[dict] = []
 
 def on_message(client, userdata, msg):
     try:
-        data = json.loads(msg.payload.decode())
+        # 1. Decode payload for processing
+        raw_payload = msg.payload  # This is already bytes
+        data = json.loads(raw_payload.decode())
         co2 = data['co2']
         
-        # Calcul de la latence (Performance)
+        # Performance/Status Logic
         latency = (time.time() - data['timestamp']) * 1000
-        
-        # Logique d'alerte conforme aux seuils de sécurité
         status = "OK"
         if co2 > 1000: status = "AÉRER"
         if co2 > 5000: status = "DANGER"
-
         print(f"[{status}] ID: {data['device_id']} | CO2: {co2} PPM | Latence: {latency:.2f}ms")
+
+        # 2. Blockchain Logic (The Fix)
+        prev_hash = BLOCKCHAIN[-1]["data_hash"] if BLOCKCHAIN else "GENESIS"
         
-        block:dict = {
-            "data_hash": hashlib.sha256(msg).hexdigest(),
-            "prev_hash": BLOCKCHAIN[-1]["data_hash"] if BLOCKCHAIN else "GENESIS",
-            "timestamp": int(time.time())
+        # We combine the new data with the previous hash to create the link
+        block_string = f"{raw_payload.decode()}{prev_hash}{time.time()}"
+        current_hash = hashlib.sha256(block_string.encode()).hexdigest()
+
+        block: dict = {
+            "data_hash": current_hash, # This is the unique ID for THIS block
+            "prev_hash": prev_hash,
+            "timestamp": int(time.time()),
+            "value": co2
         }
 
         BLOCKCHAIN.append(block)
-
+        print(BLOCKCHAIN)
     except Exception as e:
-        print(f"Erreur de parsing: {e}")
+        print(f"Erreur: {e}")
 
 # Initialisation conforme ETSI : Session persistante (clean_session=False)
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=CLIENT_ID)
